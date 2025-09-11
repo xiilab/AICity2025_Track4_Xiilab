@@ -1,0 +1,345 @@
+_base_: dfine_enhanced_base.yml
+
+__include__: [
+  '../../dataset/custom_detection.yml',
+  '../../runtime.yml',
+  '../include/dataloader.yml',
+  '../include/optimizer.yml',
+]
+
+# Essential model configuration
+task: detection
+model: DFINE
+criterion: DFINECriterion
+postprocessor: DFINEPostProcessor
+
+use_focal_loss: True
+eval_spatial_size: [1920, 1920] # h w
+
+output_dir: ./output/dfine_enhanced_l
+
+# D-FINE Model Configuration
+DFINE:
+  backbone: HGNetv2
+  encoder: HybridEncoder  # Use standard HybridEncoder for now
+  decoder: DFINETransformer  # Use standard DFINETransformer for now
+
+# HGNetv2 Large Backbone Configuration
+HGNetv2:
+  name: "B4"  # Large model using B3
+  return_idx: [1, 2, 3]
+  freeze_stem_only: True
+  freeze_at: -1  # No freezing for large model
+  freeze_norm: True
+  pretrained: True
+  local_model_dir: "weight/hgnetv2/"
+
+# HybridEncoder Configuration for Large Model
+HybridEncoder:
+  in_channels: [512, 1024, 2048]  # HGNetv2-B3 output channels
+  feat_strides: [8, 16, 32]
+  
+  # intra
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  nhead: 8
+  dim_feedforward: 1024
+  dropout: 0.
+  enc_act: 'gelu'
+  
+  # cross
+  expansion: 1.0
+  depth_mult: 1
+  act: 'silu'
+
+# DFINETransformer Configuration for Large Model
+DFINETransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  num_levels: 3
+  
+  num_layers: 6
+  eval_idx: -1
+  num_queries: 300
+  
+  num_denoising: 100
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  
+  # NEW
+  reg_max: 32
+  reg_scale: 4
+  
+  # Auxiliary decoder layers dimension scaling
+  layer_scale: 1
+  
+  num_points: [3, 6, 3]
+  cross_attn_method: default
+  query_select_method: default
+
+# Post-processor Configuration
+DFINEPostProcessor:
+  num_top_queries: 300
+
+# Enhanced Loss Configuration for Large Model
+DFINECriterion:
+  weight_dict: {
+    loss_vfl: 1.0,
+    loss_bbox: 5.0,
+    loss_giou: 2.0,
+    loss_fgl: 0.15,
+    loss_ddf: 1.5
+  }
+  losses: ['vfl', 'boxes', 'local']
+  alpha: 0.75
+  gamma: 2.0
+  reg_max: 32
+
+  matcher:
+    type: HungarianMatcher
+    weight_dict: {cost_class: 2, cost_bbox: 5, cost_giou: 2}
+    alpha: 0.25
+    gamma: 2.0
+
+# Training Configuration for Large Model
+train:
+  batch_size: 8  # Smaller batch size for large model
+  epochs: 80
+  warmup_epochs: 10
+  val_interval: 5
+  save_interval: 10
+  
+  # Training optimizations
+  grad_clip: 1.0
+  use_amp: True
+  compile_model: False
+
+# Optimizer Configuration for Large Model
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm).*$'
+      lr: 0.0000125
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$'
+      weight_decay: 0.
+
+  lr: 0.00025
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+# Learning Rate Scheduler
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [60, 75]
+  gamma: 0.1
+
+lr_warmup_scheduler:
+  type: LinearWarmup
+  warmup_duration: 500
+
+# Data Configuration
+train_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [1920, 1920], }
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy:
+        name: stop_epoch
+        epoch: 70
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
+
+  collate_fn:
+    type: BatchImageCollateFunction
+    base_size: 1920
+    base_size_repeat: 3
+    stop_epoch: 70
+
+  shuffle: True
+  total_batch_size: 8
+  num_workers: 4
+
+val_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [1920, 1920], }
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+  shuffle: False
+  total_batch_size: 16
+  num_workers: 4
+
+# EMA Configuration
+use_ema: True
+ema:
+  type: ModelEMA
+  decay: 0.9999
+  warmups: 1000
+  start: 0
+
+# AMP Configuration
+use_amp: True
+scaler:
+  type: GradScaler
+  enabled: True
+
+# Epochs
+epochs: 80
+clip_max_norm: 0.1
+
+# Enhanced D-FINE-L (Large) Configuration
+# Override base configuration for Large model variant
+
+# Enhanced Multi-Scale Feature Fusion for Large Model
+EnhancedMultiScaleFeatureFusion:
+  in_channels_list: [512, 1024, 2048]  # HGNetv2-B3 output channels
+  out_channels: 256
+  num_levels: 3
+  attention_type: "both"  # Use both channel and spatial attention
+  fusion_method: "adaptive"
+  activation: "relu"
+  use_deformable: True  # Enable deformable convolution for large model
+
+# Adaptive Training-Time Decoder Enhancement for Large Model
+AdaptiveTrainingDecoder:
+  base_num_layers: 4  # More base layers for large model
+  training_num_layers: 8  # More training layers for better knowledge transfer
+  hidden_dim: 256
+  nhead: 8
+  dim_feedforward: 1536  # Larger feedforward dimension
+  dropout: 0.1  # Slight dropout for regularization
+  activation: "relu"
+  num_levels: 3
+  num_points: 4
+  cross_attn_method: "default"
+  distillation_weight: 1.2  # Higher distillation weight
+  progressive_distillation: True
+
+# Enhanced Training Configuration for Large Model
+EnhancedTraining:
+  # Progressive Layer Distillation
+  ProgressiveLayerDistillation:
+    num_base_layers: 4
+    num_training_layers: 8
+    hidden_dim: 256
+    temperature: 3.5  # Lower temperature for sharper distillation
+    alpha: 0.8  # Higher alpha for stronger distillation
+
+  # Dynamic Inference Controller
+  DynamicInferenceController:
+    hidden_dim: 256
+    max_layers: 8
+    confidence_threshold: 0.98  # Higher threshold for large model
+    complexity_weight: 0.15
+
+  # Curriculum Learning Configuration
+  CurriculumLearning:
+    enabled: True
+    total_epochs: 100  # More epochs for large model
+    warmup_epochs: 15
+    easy_stage_ratio: 0.25
+    medium_stage_ratio: 0.35
+    hard_stage_ratio: 0.4
+    min_decoder_layers: 3
+    max_decoder_layers: 8
+    min_distillation_weight: 0.2
+    max_distillation_weight: 1.5
+    difficulty_metrics: ['object_size', 'crowd_density', 'occlusion_level', 'scale_variation']
+
+# Training Configuration for Large Model
+train:
+  batch_size: 16
+  epochs: 80
+  warmup_epochs: 10
+  val_interval: 5
+  save_interval: 10
+  
+  # Enhanced training options
+  use_curriculum_learning: True
+  use_adaptive_decoder: True
+  use_enhanced_fusion: True
+  use_progressive_distillation: True
+  
+  # Gradient clipping
+  grad_clip: 1.0
+  
+  # Mixed precision training
+  use_amp: True
+
+# Data Configuration
+data:
+  train_dataset: "coco_train"
+  val_dataset: "coco_val"
+  num_workers: 8
+  pin_memory: True
+  persistent_workers: True
+  
+  # Enhanced data augmentation for large model
+  use_mosaic: True
+  use_mixup: True
+  use_copy_paste: True  # Enable copy-paste for large model
+  
+  # Curriculum data filtering
+  use_curriculum_filtering: True
+  difficulty_assessment: True
+
+# Output Configuration
+output_dir: "./output/enhanced_dfine_l"
+save_best_only: False
+save_inference_model: True
+
+# Evaluation Configuration for Large Model
+evaluation:
+  test_complexity_budgets: [0.4, 0.6, 0.8, 1.0]  # Focus on higher complexity budgets
+  measure_inference_time: True
+  measure_memory_usage: True
+  
+# Logging Configuration
+logging:
+  log_interval: 100
+  tensorboard: True
+  wandb: False
+  
+# Device Configuration
+device: "cuda"
+distributed: True
+find_unused_parameters: False
+
+# Performance Targets for Large Model
+performance_targets:
+  inference_layers: 4
+  target_ap: 50.0  # Target AP for large model
+  target_fps: 25
+  max_memory_mb: 1500
+  compression_ratio: 0.7
+
+# Advanced Features for Large Model
+advanced_features:
+  # Multi-scale training
+  multi_scale_training: True
+  scale_ranges: [[480, 800], [512, 864], [544, 928]]
+  
+  # Test-time augmentation
+  test_time_augmentation: True
+  tta_scales: [0.8, 1.0, 1.2]
+  
+  # Model ensemble during training
+  exponential_moving_average: True
+  ema_decay: 0.9999
+  
+  # Advanced data augmentation
+  mixup: True
+  mixup_alpha: 0.2
+  cutmix: True
+  cutmix_alpha: 1.0 

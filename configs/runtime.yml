@@ -1,0 +1,31 @@
+print_freq: 100
+output_dir: './logs'
+checkpoint_freq: 12
+
+# Best metric for model selection
+# Options: 'f1', 'ap50', 'ap75', 'ap50_95'
+# 'f1': F1 score (balance between precision and recall)
+# 'ap50': Average Precision at IoU=0.5
+# 'ap75': Average Precision at IoU=0.75
+# 'ap50_95': Average Precision at IoU=0.5:0.95 (COCO standard)
+best_metric: 'f1'  # Default to F1 score
+
+sync_bn: True
+find_unused_parameters: False
+
+
+use_amp: False
+scaler:
+  type: GradScaler
+  enabled: True
+
+
+use_ema: False
+ema:
+  type: ModelEMA
+  decay: 0.9999
+  warmups: 1000
+
+use_wandb: False
+project_name: D-FINE # for wandb
+exp_name: baseline # wandb experiment name

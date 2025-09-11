@@ -1,0 +1,90 @@
+# Enhanced Dataloader Configuration for Robust Training - OPTIMIZED
+# 개선된 bbox 변환 로직 기반으로 최적화된 설정
+
+train_dataloader:
+  dataset:
+    transforms:
+      ops:
+        # ===== STEP 1: BASIC CLEANUP =====
+        # 가장 먼저 bbox 기본 정리만
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        
+        # ===== STEP 2: STANDARD DETECTION AUGMENTATION =====
+        # 원본 크기에서 IoU crop 적용 (가장 중요!)
+        - {type: RandomZoomOut, side_range: [1.0, 1.4], fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}  # crop 후 정리
+        
+        # ===== STEP 3: GEOMETRIC AUGMENTATION (원본 해상도에서) =====
+        # 원본 크기에서 geometric transformation - GeometricAugmentationPipeline 사용
+        - {type: GeometricAugmentationPipeline, h_flip_p: 0.5, v_flip_p: 0.0, rotate_p: 0.5, rotate_limit: 30, fill: 0}
+        - {type: SanitizeBoundingBoxes, min_size: 1}  # geometric augmentation 후 정리
+        
+        # ===== STEP 4: RESIZE (geometric aug 후) =====
+        # geometric augmentation 완료 후 target 크기로 resize
+        - {type: Resize, size: [1280, 1280]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}  # resize 후 정리
+        
+        # ===== STEP 5: ROBUST PHOTOMETRIC AUGMENTATION =====
+        # bbox에 영향주지 않는 color/lighting augmentation
+        - {type: RandomPhotometricDistort, p: 0.8}  # 높은 확률로 color distortion
+        - {type: RandomBrightnessContrast, 
+           brightness_limit: [-0.3, 0.3], 
+           contrast_limit: [-0.3, 0.3], 
+           p: 0.7}  # 강한 밝기/대비 변화
+        - {type: RandomGamma, gamma_limit: [70, 130], p: 0.5}  # 감마 보정
+        
+        # ===== STEP 6: ROBUST NOISE & DEGRADATION =====
+        # bbox에 영향주지 않는 noise/degradation
+        - {type: GaussianNoise, var_limit: [5.0, 25.0], p: 0.5}  # 노이즈
+        - {type: JPEGCompression, quality_lower: 60, quality_upper: 95, p: 0.4}  # 압축 아티팩트
+        - {type: CLAHE, clip_limit: [1, 4], tile_grid_size: [8, 8], p: 0.3}  # 히스토그램 균등화
+        
+        # ===== STEP 7: ROBUST OCCLUSION & DROPOUT =====
+        # bbox에 영향주지 않는 occlusion
+        - {type: CoarseDropout, max_holes: 8, max_height: 48, max_width: 48, p: 0.4}  # 랜덤 가림
+        - {type: RandomErase, p: 0.3, scale: [0.02, 0.2], ratio: [0.3, 3.3], value: 'random'}  # 랜덤 지우기
+        
+        # ===== STEP 8: FINAL FORMAT CONVERSION =====
+        # 모든 augmentation 완료 후 최종 format 변환
+        - {type: SanitizeBoundingBoxes, min_size: 1}  # 최종 정리
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}  # 이미지 tensor 변환
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}  # bbox format과 정규화
+    
+      policy:
+        name: stop_epoch
+        epoch: 4  # robust training에서는 일찍 중단
+        ops: [
+          'RandomZoomOut', 
+          'RandomIoUCrop',
+          'GeometricAugmentationPipeline',  # 통합된 geometric augmentation
+          'RandomPhotometricDistort', 
+          'RandomBrightnessContrast',
+          'RandomGamma',
+          'GaussianNoise',
+          'JPEGCompression', 
+          'CLAHE',
+          'CoarseDropout',
+          'RandomErase'
+        ]
+        
+  collate_fn:
+    type: BatchImageCollateFunction
+    base_size: 1280
+    base_size_repeat: 3
+    stop_epoch: 72 # epoch in [72, ~) stop `multiscales`
+
+  shuffle: True
+  total_batch_size: 32 # 4 GPUs * 2 per GPU
+  num_workers: 4  # 줄여서 안정성 향상
+
+
+val_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [1280, 1280], }
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+  shuffle: False
+  total_batch_size: 64 # 4 GPUs * 2 per GPU
+  num_workers: 4 # 줄여서 안정성 향상

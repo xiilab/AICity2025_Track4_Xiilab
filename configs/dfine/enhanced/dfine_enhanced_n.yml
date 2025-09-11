@@ -1,0 +1,157 @@
+_base_: dfine_enhanced_base.yml
+
+# Enhanced D-FINE-N (Nano) Configuration
+# Optimized for lightweight deployment with adaptive training
+
+model_variant: "dfine_enhanced_n"
+
+# Lightweight Backbone
+HGNetv2:
+  pretrained: True
+  local_model_dir: weight/hgnetv2/
+  variant: "nano"  # Use nano variant
+  width_mult: 0.5
+
+# Adaptive Feature Pyramid for Lightweight Model
+AdaptiveFeaturePyramid:
+  in_channels_list: [256, 512, 1024]  # Reduced channels for nano
+  out_channels: 192  # Reduced from 256
+  num_extra_levels: 1  # Fewer extra levels
+  activation: "relu"
+  attention_type: "channel"  # Only channel attention for efficiency
+  fusion_method: "adaptive"
+  use_deformable: False
+
+# Lightweight Adaptive Decoder
+AdaptiveTrainingDecoder:
+  base_num_layers: 2  # Minimal base layers for inference
+  training_num_layers: 4  # Fewer training layers
+  hidden_dim: 192  # Reduced hidden dimension
+  nhead: 6  # Fewer attention heads
+  dim_feedforward: 768  # Reduced feedforward dimension
+  dropout: 0.1
+  activation: "relu"
+  num_levels: 3
+  num_points: 3  # Fewer sampling points
+  cross_attn_method: "default"
+  distillation_weight: 1.5  # Higher distillation weight for lightweight model
+  progressive_distillation: True
+  
+  # Feature configuration
+  feat_channels: [192, 192, 192]
+  feat_strides: [8, 16, 32]
+  
+  # Query configuration
+  num_queries: 200  # Fewer queries
+  eval_idx: -1
+  
+  # Denoising configuration
+  num_denoising: 50  # Reduced denoising queries
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  
+  # Regression configuration
+  reg_max: 16  # Reduced regression range
+  reg_scale: 4
+
+# Enhanced Curriculum Learning for Lightweight Model
+CurriculumLearning:
+  total_epochs: 100  # More epochs for lightweight model
+  warmup_epochs: 15  # Longer warmup
+  easy_stage_ratio: 0.4  # Longer easy stage
+  medium_stage_ratio: 0.4
+  hard_stage_ratio: 0.2
+  min_decoder_layers: 1
+  max_decoder_layers: 4
+  min_distillation_weight: 0.5  # Higher minimum distillation
+  max_distillation_weight: 2.0  # Higher maximum distillation
+  difficulty_metrics: ['object_size', 'crowd_density']  # Focus on key metrics
+
+# Progressive Layer Distillation for Nano
+ProgressiveLayerDistillation:
+  temperature: 3.0  # Lower temperature for stronger distillation
+  alpha: 0.8
+  feature_alignment: True
+  attention_distillation: True
+  response_distillation: False  # Disable for efficiency
+
+# Dynamic Inference Controller
+DynamicInferenceController:
+  confidence_threshold: 0.90  # Lower threshold for early stopping
+  complexity_weight: 0.2
+  min_layers: 1
+  max_layers: 4
+
+# Enhanced Loss Configuration for Lightweight
+DFINECriterion:
+  weight_dict: {
+    loss_vfl: 1, 
+    loss_bbox: 4,  # Reduced bbox weight
+    loss_giou: 1.5,  # Reduced giou weight
+    loss_fgl: 0.1, 
+    loss_ddf: 1.0,
+    loss_distillation: 2.0,  # Higher distillation weight
+    loss_pld_feature: 1.0,  # Higher PLD weights
+    loss_pld_attention: 0.5
+  }
+  losses: ['vfl', 'boxes', 'local', 'distillation']
+  alpha: 0.75
+  gamma: 2.0
+  reg_max: 16
+
+# Training Configuration for Nano
+train:
+  batch_size: 32  # Larger batch size for lightweight model
+  epochs: 100
+  warmup_epochs: 15
+  val_interval: 5
+  save_interval: 10
+  
+  # Enhanced training options
+  use_curriculum_learning: True
+  use_adaptive_decoder: True
+  use_enhanced_fusion: True
+  use_progressive_distillation: True
+  
+  # Gradient clipping
+  grad_clip: 0.5  # Lower gradient clipping
+  
+  # Mixed precision training
+  use_amp: True
+
+# Optimizer Configuration
+optimizer:
+  type: AdamW
+  lr: 0.0002  # Higher learning rate for lightweight model
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+  
+  # Curriculum-aware learning rate
+  curriculum_lr_scaling: True
+
+# Learning Rate Scheduler
+lr_scheduler:
+  type: CosineAnnealingLR
+  T_max: 100
+  eta_min: 0.00001
+  
+  # Adaptive scheduling
+  curriculum_adaptive: True
+
+# Evaluation Configuration
+evaluation:
+  test_complexity_budgets: [0.2, 0.4, 0.6, 0.8, 1.0]
+  measure_inference_time: True
+  measure_memory_usage: True
+  target_fps: 60  # Target FPS for nano model
+
+# Output Configuration
+output_dir: "./output/enhanced_dfine_n"
+
+# Expected Performance Targets
+performance_targets:
+  inference_layers: 2
+  target_ap: 35.0  # Target AP for nano model
+  target_fps: 60
+  max_memory_mb: 500
+  compression_ratio: 0.3 

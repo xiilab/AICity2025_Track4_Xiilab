@@ -1,0 +1,13 @@
+output/
+weight/
+*.pyc
+wandb/
+*.pth
+*.onnx
+
+# Visulization Data
+bad_pseudo_predict/
+dfine_base/
+dfine_best_8k/
+dfine_scatch/
+final_test/

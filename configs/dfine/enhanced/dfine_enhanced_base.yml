@@ -1,0 +1,310 @@
+task: detection
+
+model: DFINE
+criterion: DFINECriterion
+postprocessor: DFINEPostProcessor
+
+use_focal_loss: True
+eval_spatial_size: [1920, 1920] # h w
+
+# Enhanced D-FINE Configuration with Advanced Components
+DFINE:
+  backbone: HGNetv2
+  encoder: EnhancedMultiScaleFeatureFusion  # Using EMSFF instead of HybridEncoder
+  decoder: AdaptiveTrainingDecoder  # Using adaptive decoder for training enhancement
+
+# HGNetv2 Backbone Configuration
+HGNetv2:
+  name: "B2"  # Available: B0, B1, B2, B3, B4, B5, B6
+  use_lab: False  # LearnableAffineBlock
+  return_idx: [1, 2, 3]  # Return stage 2, 3, 4 features
+  freeze_stem_only: True
+  freeze_at: -1  # -1 means no freezing, 0 means freeze stem, 1+ means freeze stages
+  freeze_norm: True
+  pretrained: True
+  local_model_dir: "weight/hgnetv2/"
+
+# Enhanced Multi-Scale Feature Fusion (EMSFF)
+EnhancedMultiScaleFeatureFusion:
+  in_channels_list: [384, 768, 1536]  # HGNetv2-B2 output channels for stages 2,3,4
+  out_channels: 256
+  num_levels: 3
+  attention_type: "both"  # "channel", "spatial", "both"
+  fusion_method: "adaptive"  # "adaptive", "concat", "add"
+  activation: "relu"
+  use_deformable: False  # Set to True for more advanced feature alignment
+
+# Adaptive Training-Time Decoder Enhancement (ATDE)
+AdaptiveTrainingDecoder:
+  base_num_layers: 3  # Lightweight layers for inference
+  training_num_layers: 6  # Sophisticated layers for training
+  hidden_dim: 256
+  nhead: 8
+  dim_feedforward: 1024
+  dropout: 0.0
+  activation: "relu"
+  num_levels: 3
+  num_points: 4
+  cross_attn_method: "default"
+  distillation_weight: 1.0
+  progressive_distillation: True
+
+# Standard D-FINE Transformer Configuration (fallback)
+DFINETransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  num_levels: 3
+  num_layers: 6
+  eval_idx: -1
+  num_queries: 300
+  num_denoising: 100
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  reg_max: 32
+  reg_scale: 4
+  layer_scale: 1
+  num_points: [3, 6, 3]  # Multi-scale sampling points
+  cross_attn_method: "default"
+  query_select_method: "default"
+
+# Enhanced Loss Configuration with Distillation
+DFINECriterion:
+  weight_dict: {
+    loss_vfl: 1.0,
+    loss_bbox: 5.0,
+    loss_giou: 2.0,
+    loss_fgl: 0.15,
+    loss_ddf: 1.5,
+    loss_distillation: 1.0,  # Progressive layer distillation
+    loss_pld_feature: 0.5,   # Feature alignment loss
+    loss_pld_attention: 0.3, # Attention distillation loss
+    loss_pld_response: 0.2   # Response distillation loss
+  }
+  losses: ['vfl', 'boxes', 'local', 'distillation']
+  alpha: 0.75
+  gamma: 2.0
+  reg_max: 32
+
+  matcher:
+    type: HungarianMatcher
+    weight_dict: {cost_class: 2, cost_bbox: 5, cost_giou: 2}
+    alpha: 0.25
+    gamma: 2.0
+
+# Post-processor Configuration
+DFINEPostProcessor:
+  num_top_queries: 300
+
+# Enhanced Training Configuration
+EnhancedTraining:
+  # Progressive Layer Distillation (PLD)
+  ProgressiveLayerDistillation:
+    num_base_layers: 3
+    num_training_layers: 6
+    hidden_dim: 256
+    temperature: 4.0
+    alpha: 0.7
+
+  # Dynamic Inference Controller
+  DynamicInferenceController:
+    hidden_dim: 256
+    max_layers: 6
+    confidence_threshold: 0.95
+    complexity_weight: 0.1
+
+  # Curriculum Learning Configuration
+  CurriculumLearning:
+    enabled: True
+    total_epochs: 80
+    warmup_epochs: 10
+    easy_stage_ratio: 0.3
+    medium_stage_ratio: 0.4
+    hard_stage_ratio: 0.3
+    min_decoder_layers: 2
+    max_decoder_layers: 6
+    min_distillation_weight: 0.1
+    max_distillation_weight: 1.0
+    difficulty_metrics: ['object_size', 'crowd_density', 'occlusion_level', 'scale_variation']
+
+  # Adaptive Feature Pyramid Configuration
+  AdaptiveFeaturePyramid:
+    enabled: True
+    in_channels_list: [384, 768, 1536]  # HGNetv2-B2 channels
+    out_channels: 256
+    num_extra_levels: 2
+    activation: "relu"
+
+# Training Configuration
+train:
+  batch_size: 16
+  epochs: 80
+  warmup_epochs: 10
+  val_interval: 1
+  save_interval: 10
+  
+  # Enhanced training features
+  use_curriculum_learning: True
+  use_adaptive_decoder: True
+  use_enhanced_fusion: True
+  use_progressive_distillation: True
+  
+  # Training optimizations
+  grad_clip: 1.0
+  use_amp: True  # Automatic Mixed Precision
+  compile_model: False  # PyTorch 2.0 compilation
+  
+  # Complexity budget for dynamic inference testing
+  test_complexity_budgets: [0.3, 0.5, 0.7, 1.0]
+
+# Optimizer Configuration
+optimizer:
+  type: AdamW
+  lr: 0.0001
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+  eps: 1e-8
+  
+  # Layer-wise learning rate decay (optional)
+  layer_decay: 0.9
+  
+# Learning Rate Scheduler
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [60, 75]
+  gamma: 0.1
+  warmup_method: "linear"
+  warmup_iters: 1000
+
+# Data Configuration
+data:
+  train_dataset: "coco_train"
+  val_dataset: "coco_val"
+  num_workers: 8
+  pin_memory: True
+  persistent_workers: True
+  
+  # Data augmentation
+  use_mosaic: True
+  use_mixup: True
+  use_copy_paste: False
+  
+  # Curriculum data filtering
+  use_curriculum_filtering: True
+  difficulty_assessment: True
+
+# Model Architecture Variants (for different scales)
+model_variants:
+  # Nano model (fastest inference)
+  nano:
+    HGNetv2:
+      name: "B0"
+    EnhancedMultiScaleFeatureFusion:
+      in_channels_list: [64, 256, 512]
+    AdaptiveTrainingDecoder:
+      base_num_layers: 2
+      training_num_layers: 4
+      
+  # Small model (balanced)
+  small:
+    HGNetv2:
+      name: "B1"
+    EnhancedMultiScaleFeatureFusion:
+      in_channels_list: [64, 256, 512]
+    AdaptiveTrainingDecoder:
+      base_num_layers: 3
+      training_num_layers: 5
+      
+  # Base model (default)
+  base:
+    HGNetv2:
+      name: "B2"
+    EnhancedMultiScaleFeatureFusion:
+      in_channels_list: [384, 768, 1536]
+    AdaptiveTrainingDecoder:
+      base_num_layers: 3
+      training_num_layers: 6
+      
+  # Large model (best accuracy)
+  large:
+    HGNetv2:
+      name: "B3"
+    EnhancedMultiScaleFeatureFusion:
+      in_channels_list: [512, 1024, 2048]
+    AdaptiveTrainingDecoder:
+      base_num_layers: 4
+      training_num_layers: 8
+
+# Output Configuration
+output_dir: "./output/enhanced_dfine"
+save_best_only: False
+save_inference_model: True
+save_onnx: False
+save_torchscript: False
+
+# Best metric configuration for model selection
+# Choose the metric that best suits your task requirements:
+# - 'f1': Best overall balance between precision and recall (recommended for most tasks)
+# - 'ap50': Good for tasks where detecting objects is more important than perfect localization
+# - 'ap75': Better for tasks requiring precise localization
+# - 'ap50_95': COCO standard metric, best for benchmarking and comparison
+best_metric: 'f1'  # Options: 'f1', 'ap50', 'ap75', 'ap50_95'
+
+# Evaluation Configuration
+evaluation:
+  # Test different complexity budgets
+  test_complexity_budgets: [0.3, 0.5, 0.7, 1.0]
+  measure_inference_time: True
+  measure_memory_usage: True
+  measure_flops: True
+  
+  # Early stopping configuration
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+    monitor: "val_mAP"
+    mode: "max"
+
+# Logging Configuration
+logging:
+  log_interval: 100
+  tensorboard: True
+  wandb: False
+  log_model_graph: True
+  log_gradients: False
+  
+# Device Configuration
+device: "cuda"
+distributed: True
+find_unused_parameters: False
+sync_bn: True
+
+# Debugging and Profiling
+debug:
+  enabled: False
+  profile_memory: False
+  profile_compute: False
+  detect_anomaly: False
+  
+# Reproducibility
+seed: 42
+deterministic: False  # Set to True for full reproducibility (may slow down training)
+
+# Model Export Configuration
+export:
+  # ONNX export settings
+  onnx:
+    opset_version: 11
+    dynamic_axes: True
+    simplify: True
+    
+  # TensorRT optimization
+  tensorrt:
+    enabled: False
+    precision: "fp16"
+    workspace_size: 1073741824  # 1GB
+    
+  # Mobile deployment
+  mobile:
+    quantization: False
+    pruning: False 

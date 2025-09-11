@@ -1,0 +1,44 @@
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+
+num_classes: 5 # your dataset classes
+remap_mscoco_category: False
+
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    # img_folder: /DATA/jhlee/fisheye_train/images_merged_with_woodscape
+    # ann_file: /DATA/jhlee/fisheye_train/images_merged_with_woodscape.json
+    # img_folder: /DATA_17/jhlee/fisheye_train/images_augmented
+    # ann_file: /DATA_17/jhlee/fisheye_train/smart_merged_final.json
+    img_folder: /DATA/jhlee/fisheye8k_coco/train2017
+    ann_file: /DATA/jhlee/fisheye8k_coco/annotations/wbf_train_split_fixed.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /DATA/jhlee/fisheye8k_coco/val2017
+    ann_file: /DATA/jhlee/fisheye8k_coco/annotations/test_new.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction

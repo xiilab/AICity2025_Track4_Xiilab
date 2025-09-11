@@ -1,0 +1,144 @@
+task: detection
+
+model: DFINE
+criterion: DFINEGAINCriterion
+postprocessor: DFINEPostProcessor
+
+use_focal_loss: True
+eval_spatial_size: [1920 , 1920] # h w
+
+DFINE:
+  _name: DFINE
+  backbone: HGNetv2
+  encoder: HybridEncoder
+  decoder: DFINETransformerWithGAIN  # GAIN-enhanced decoder 사용
+
+HGNetv2:
+  _name: HGNetv2
+  pretrained: True
+  local_model_dir: weight/hgnetv2/
+
+HybridEncoder:
+  _name: HybridEncoder
+  in_channels: [512, 1024, 2048]
+  feat_strides: [8, 16, 32]
+
+  # intra
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  nhead: 8
+  dim_feedforward: 1024
+  dropout: 0.
+  enc_act: 'gelu'
+
+  # cross
+  expansion: 1.0
+  depth_mult: 1
+  act: 'silu'
+
+# GAIN-Enhanced D-FINE Transformer Configuration
+DFINETransformerWithGAIN:
+  _name: DFINETransformerWithGAIN
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  num_levels: 3
+
+  num_layers: 6
+  eval_idx: -1
+  num_queries: 300
+
+  num_denoising: 100
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+
+  # Original D-FINE parameters
+  reg_max: 32
+  reg_scale: 4
+  layer_scale: 1
+
+  num_points: [3, 6, 3]
+  cross_attn_method: default
+  query_select_method: default
+
+  # ============ GAIN-Specific Parameters ============
+  # GAIN 활성화
+  gain_enabled: True
+  
+  # GAIN을 적용할 레이어 (중간 레이어들)
+  gain_layers: [2, 4]  # 6개 레이어 중 2번, 4번 레이어에 적용
+  
+  # Original features와 enhanced features 결합 가중치
+  gain_attention_weight: 0.3  # 0.7 * original + 0.3 * enhanced
+  
+  # Self-guided attention refinement 활성화
+  gain_self_guided: True
+  
+  # Attention supervision 활성화 (ground truth attention이 있는 경우)
+  gain_attention_supervision: False  # COCO에는 attention GT가 없으므로 False
+  
+  # GAIN loss 가중치 (total loss에서의 비중)
+  gain_loss_weight: 0.1  # 10%의 가중치로 GAIN loss 추가
+
+DFINEPostProcessor:
+  _name: DFINEPostProcessor
+  num_top_queries: 300
+
+# GAIN loss를 포함한 Criterion
+DFINEGAINCriterion:
+  _name: DFINEGAINCriterion
+  weight_dict: 
+    loss_vfl: 1
+    loss_bbox: 5
+    loss_giou: 2
+    loss_fgl: 0.15
+    loss_ddf: 1.5
+    loss_gain: 0.1  # GAIN attention loss
+    
+  losses: ['vfl', 'boxes', 'local', 'gain']  # 'gain' loss 추가
+  alpha: 0.75
+  gamma: 2.0
+  reg_max: 32
+  
+  # GAIN loss 관련 설정
+  gain_loss_weight: 0.1
+  gain_attention_supervision: False
+  
+  matcher:
+    _name: HungarianMatcher
+    type: HungarianMatcher
+    weight_dict: {cost_class: 2, cost_bbox: 5, cost_giou: 2}
+    alpha: 0.25
+    gamma: 2.0
+
+# ============ GAIN Training Strategy ============
+# GAIN 학습 전략 설정
+gain_training:
+  # Progressive training: 처음에는 GAIN 없이 학습, 나중에 GAIN 활성화
+  progressive_training: True
+  gain_start_epoch: 20  # 20 에포크부터 GAIN 활성화
+  
+  # Attention map regularization
+  attention_regularization:
+    diversity_weight: 0.01  # attention diversity loss 가중치
+    completeness_weight: 0.001  # attention completeness loss 가중치
+    
+  # Attention map 시각화 설정
+  visualization:
+    enabled: True
+    save_attention_maps: True
+    save_interval: 1000  # 1000 step마다 저장
+    num_samples: 4  # 배치당 저장할 샘플 수
+
+# ============ Model Ensemble & Inference ============
+# GAIN enhanced 모델의 추론 설정
+inference:
+  # Attention-guided post-processing
+  use_attention_guidance: False  # 추론 시 attention 정보 활용 여부
+  
+  # Multi-scale testing with attention
+  multiscale_attention: False
+  
+  # TTA (Test Time Augmentation) with GAIN
+  tta_with_gain: False 

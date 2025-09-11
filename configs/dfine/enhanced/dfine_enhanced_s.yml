@@ -1,0 +1,158 @@
+_base_: dfine_enhanced_base.yml
+
+# Enhanced D-FINE-S (Small) Configuration
+# Balanced configuration for good accuracy-efficiency trade-off
+
+model_variant: "dfine_enhanced_s"
+
+# Small Backbone
+HGNetv2:
+  pretrained: True
+  local_model_dir: weight/hgnetv2/
+  variant: "small"
+  width_mult: 0.75
+
+# Adaptive Feature Pyramid for Small Model
+AdaptiveFeaturePyramid:
+  in_channels_list: [384, 768, 1536]  # Intermediate channels
+  out_channels: 224  # Balanced dimension
+  num_extra_levels: 2
+  activation: "relu"
+  attention_type: "both"  # Both channel and spatial attention
+  fusion_method: "adaptive"
+  use_deformable: False
+
+# Balanced Adaptive Decoder
+AdaptiveTrainingDecoder:
+  base_num_layers: 3  # Standard base layers for inference
+  training_num_layers: 5  # Moderate training layers
+  hidden_dim: 224  # Balanced hidden dimension
+  nhead: 7  # Balanced attention heads
+  dim_feedforward: 896  # Balanced feedforward dimension
+  dropout: 0.05
+  activation: "relu"
+  num_levels: 3
+  num_points: 4  # Standard sampling points
+  cross_attn_method: "default"
+  distillation_weight: 1.2  # Moderate distillation weight
+  progressive_distillation: True
+  
+  # Feature configuration
+  feat_channels: [224, 224, 224]
+  feat_strides: [8, 16, 32]
+  
+  # Query configuration
+  num_queries: 250  # Balanced queries
+  eval_idx: -1
+  
+  # Denoising configuration
+  num_denoising: 75  # Moderate denoising queries
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  
+  # Regression configuration
+  reg_max: 24  # Moderate regression range
+  reg_scale: 4
+
+# Balanced Curriculum Learning
+CurriculumLearning:
+  total_epochs: 90  # Moderate training epochs
+  warmup_epochs: 12
+  easy_stage_ratio: 0.35
+  medium_stage_ratio: 0.4
+  hard_stage_ratio: 0.25
+  min_decoder_layers: 2
+  max_decoder_layers: 5
+  min_distillation_weight: 0.3
+  max_distillation_weight: 1.5
+  difficulty_metrics: ['object_size', 'crowd_density', 'occlusion_level']
+
+# Progressive Layer Distillation for Small
+ProgressiveLayerDistillation:
+  temperature: 3.5  # Moderate temperature
+  alpha: 0.75
+  feature_alignment: True
+  attention_distillation: True
+  response_distillation: True
+
+# Dynamic Inference Controller
+DynamicInferenceController:
+  confidence_threshold: 0.92
+  complexity_weight: 0.15
+  min_layers: 2
+  max_layers: 5
+
+# Enhanced Loss Configuration for Small
+DFINECriterion:
+  weight_dict: {
+    loss_vfl: 1, 
+    loss_bbox: 4.5,
+    loss_giou: 1.8,
+    loss_fgl: 0.12, 
+    loss_ddf: 1.2,
+    loss_distillation: 1.5,
+    loss_pld_feature: 0.7,
+    loss_pld_attention: 0.4,
+    loss_pld_response: 0.15
+  }
+  losses: ['vfl', 'boxes', 'local', 'distillation']
+  alpha: 0.75
+  gamma: 2.0
+  reg_max: 24
+
+# Training Configuration for Small
+train:
+  batch_size: 24  # Balanced batch size
+  epochs: 90
+  warmup_epochs: 12
+  val_interval: 5
+  save_interval: 10
+  
+  # Enhanced training options
+  use_curriculum_learning: True
+  use_adaptive_decoder: True
+  use_enhanced_fusion: True
+  use_progressive_distillation: True
+  
+  # Gradient clipping
+  grad_clip: 0.8
+  
+  # Mixed precision training
+  use_amp: True
+
+# Optimizer Configuration
+optimizer:
+  type: AdamW
+  lr: 0.00015  # Moderate learning rate
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+  
+  # Curriculum-aware learning rate
+  curriculum_lr_scaling: True
+
+# Learning Rate Scheduler
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [65, 80]
+  gamma: 0.1
+  
+  # Adaptive scheduling
+  curriculum_adaptive: True
+
+# Evaluation Configuration
+evaluation:
+  test_complexity_budgets: [0.3, 0.5, 0.7, 0.9, 1.0]
+  measure_inference_time: True
+  measure_memory_usage: True
+  target_fps: 45  # Target FPS for small model
+
+# Output Configuration
+output_dir: "./output/enhanced_dfine_s"
+
+# Expected Performance Targets
+performance_targets:
+  inference_layers: 3
+  target_ap: 42.0  # Target AP for small model
+  target_fps: 45
+  max_memory_mb: 800
+  compression_ratio: 0.5 
