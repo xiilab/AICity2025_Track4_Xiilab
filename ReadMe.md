@@ -27,6 +27,7 @@ pip install -r requirements.txt
 
 - Data root: `dataset`
 - Annotation JSON must be in COCO format
+- Download: Google Drive dataset folder — [link](https://drive.google.com/drive/folders/1B4tpLAjWREeUtutJTaTaanfvjeFxB0O2?hl=ko)
 
 Example directory
 ```text
@@ -74,6 +75,25 @@ python train.py \
 Notes
 - Stage1 augmentation module: `data_aug_gen.py`
 - Stage1/Stage2 pretrained checkpoints: Hugging Face [Xiilab-model/AICity_track4](https://huggingface.co/Xiilab-model/AICity_track4)
+
+### 3-1. Stage2 Finetuning (Fisheye-specific Augmentation)
+
+Stage2 is based on the pretrained Stage1 checkpoint, with an additional **extended fisheye-specific augmentation set** applied for further finetuning.  
+
+Key points:
+- Starts from the Stage1 weights `best_stg1.pth`
+- Applies 40+ custom augmentations designed for real-world fisheye conditions (distortion, lighting, weather, motion, etc.)
+- Uses a `stop_epoch` policy to automatically disable strong augmentations after a certain epoch
+- Goal: **Optimize validation F1 score and enhance robustness under real-world fisheye scenarios**
+
+Example run:
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 \
+  train.py \
+  --c configs/dfine/custom/dfine_hgnetv2_m_custom.yml \
+  --tuning best_f1_stg1_1280.pth \
+  --use-amp --seed=0
+```
 
 Stage1 augmentation example
 ```bash
