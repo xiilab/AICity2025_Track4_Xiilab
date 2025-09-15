@@ -73,10 +73,24 @@ python train.py \
 ```
 
 Notes
-- Stage1 augmentation module: `data_aug_gen.py`
 - Stage1/Stage2 pretrained checkpoints: Hugging Face [Xiilab-model/AICity_track4](https://huggingface.co/Xiilab-model/AICity_track4)
 
-### 3-1. Stage2 Finetuning (Fisheye-specific Augmentation)
+### 3-1. Stage1 Augmentation
+
+Stage1 uses basic augmentation for initial training.
+
+Stage1 augmentation example
+```bash
+python data_aug_gen.py \
+  -i path/to/images \
+  -j path/to/annotations.json \
+  -o output/augmented/images \
+  -a output/augmented/annotations.json \
+  -n 3 \
+  --validation-dir output/augmentation_validation
+```
+
+### 3-2. Stage2 Finetuning (Fisheye-specific Augmentation)
 
 Stage2 is based on the pretrained Stage1 checkpoint, with an additional **extended fisheye-specific augmentation set** applied for further finetuning.  
 
@@ -87,14 +101,13 @@ Key points:
 - Goal: **Optimize validation F1 score and enhance robustness under real-world fisheye scenarios**
 
 #### Fisheye-specific Augmentations Include:
-- **Distortion Effects**: FisheyeDistortionAugment, FisheyeRadialDistortion, FisheyeBarrelDistortion, FisheyePincushionDistortion
-- **Lens Characteristics**: FisheyeLensSimulation, FisheyeVignetteAugment, FisheyeChromaticAberration
-- **Lighting & Weather**: FisheyeRainSimulation, FisheyeFogSimulation, FisheyeGlareSimulation, FisheyeShadowProjection
-- **Motion & Blur**: FisheyeMotionBlur, FisheyeRadialBlur, FisheyeZoomBlur, BBoxMotionBlur
-- **Edge & Contrast**: FisheyeEdgeEnhancement, FisheyeContrastEnhancement, FisheyeLowContrastEnhancement
-- **Object Enhancement**: FisheyeEdgeObjectEnhancement, FisheyeSmallObjectAmplification, FisheyeObjectBoundaryRefinement
-- **Advanced Effects**: FisheyeHDR, FisheyeDepthOfFieldSimulation, FisheyeLensFlareSimulation
-- **Detection Optimization**: FisheyeDetectionConfidenceBoost, FisheyeFalsePositiveReduction, FisheyeConfidenceCalibration
+- **Distortion Effects**: Fisheye lens distortion, barrel/pincushion distortion, radial distortion
+- **Lens Characteristics**: Vignette effects, chromatic aberration, lens simulation
+- **Lighting & Weather**: Rain, fog, glare, shadow effects
+- **Motion & Blur**: Motion blur, radial blur, zoom blur
+- **Edge & Contrast**: Edge enhancement, contrast adjustment, low contrast enhancement
+- **Object Enhancement**: Small object amplification, boundary refinement
+- **Advanced Effects**: HDR, depth of field, lens flare simulation
 
 #### Implementation Details:
 - Augmentation transforms are defined in `src/data/transforms/_transforms_stage2.py`
@@ -109,17 +122,6 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 \
   --c configs/dfine/custom/dfine_hgnetv2_m_custom.yml \
   --tuning best_f1_stg1_1280.pth \
   --use-amp --seed=0
-```
-
-Stage1 augmentation example
-```bash
-python data_aug_gen.py \
-  -i path/to/images \
-  -j path/to/annotations.json \
-  -o output/augmented/images \
-  -a output/augmented/annotations.json \
-  -n 3 \
-  --validation-dir output/augmentation_validation
 ```
 
 Pseudo-label generation (WBF ensemble)
