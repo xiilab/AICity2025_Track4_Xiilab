@@ -116,10 +116,6 @@ Pseudo-label generation (WBF ensemble)
 ```bash
 python active_learning/wtf_1k.py
 ```
-- Required packages:
-```bash
-pip install ensemble-boxes tqdm opencv-python numpy
-```
 
 Pseudo-label generation (batch inference, Stage1 checkpoint)
 - Script: `active_learning/dfine_pseudo_inference.sh`
