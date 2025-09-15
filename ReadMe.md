@@ -73,6 +73,7 @@ python train.py \
 ```
 
 Notes
+- Stage1 augmentation module: `data_aug_gen.py`
 - Stage1/Stage2 pretrained checkpoints: Hugging Face [Xiilab-model/AICity_track4](https://huggingface.co/Xiilab-model/AICity_track4)
 
 ### 3-1. Stage1 Augmentation
@@ -194,5 +195,4 @@ Example
 CUDA_VISIBLE_DEVICES=0,1 python tools/inference/torch_inf_multi_gpu_batch.py \
   -c <cfg> -r <ckpt> -i /path/to/dir -o /path/to/out
 ```
-
 

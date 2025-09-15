@@ -68,6 +68,10 @@ python train.py \
 - Stage1 증강 모듈: `data_aug_gen.py` (학습 초기 단계 데이터 증강 로직)
 - Stage1/Stage2 사전학습 체크포인트: Hugging Face [Xiilab-model/AICity_track4](https://huggingface.co/Xiilab-model/AICity_track4)
 
+### 3-1. Stage1 증강
+
+Stage1은 초기 학습을 위한 기본 증강을 사용합니다.
+
 Stage1 증강 실행 예시
 ```bash
 python data_aug_gen.py \
@@ -77,6 +81,40 @@ python data_aug_gen.py \
   -a output/augmented/annotations.json \
   -n 3 \
   --validation-dir output/augmentation_validation
+```
+
+### 3-2. Stage2 파인튜닝 (Fisheye 특화 증강)
+
+Stage2는 사전학습된 Stage1 체크포인트를 기반으로 하며, 추가적인 **확장된 fisheye 특화 증강 세트**를 적용하여 추가 파인튜닝을 수행합니다.
+
+주요 특징:
+- Stage1 가중치 `best_stg1.pth`에서 시작
+- 실제 fisheye 환경을 위해 설계된 **40+ 커스텀 증강** 적용
+- 특정 에포크 후 강한 증강을 자동으로 비활성화하는 `stop_epoch` 정책 사용
+- 목표: **검증 F1 점수 최적화 및 실제 fisheye 시나리오에서의 견고성 향상**
+
+#### Fisheye 특화 증강 포함:
+- **왜곡 효과**: Fisheye 렌즈 왜곡, 배럴/핀쿠션 왜곡, 방사형 왜곡
+- **렌즈 특성**: 비네팅 효과, 색수차, 렌즈 시뮬레이션
+- **조명 및 날씨**: 비, 안개, 눈부심, 그림자 효과
+- **모션 및 블러**: 모션 블러, 방사형 블러, 줌 블러
+- **엣지 및 대비**: 엣지 향상, 대비 조정, 저대비 향상
+- **객체 향상**: 작은 객체 증폭, 경계 정제
+- **고급 효과**: HDR, 심도 효과, 렌즈 플레어 시뮬레이션
+
+#### 구현 세부사항:
+- 증강 변환은 `src/data/transforms/_transforms_stage2.py`에 정의됨
+- 각 증강은 확률 기반 적용 및 매개변수 무작위화 포함
+- 기하학적 증강에 대해 바운딩 박스 좌표가 적절히 변환됨
+- PIL Image와 torchvision Image 텐서 형식 모두 지원
+
+실행 예시:
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 \
+  train.py \
+  --c configs/dfine/custom/dfine_hgnetv2_m_custom.yml \
+  --tuning best_f1_stg1_1280.pth \
+  --use-amp --seed=0
 ```
 
 의사라벨 생성(WBF 앙상블)
