@@ -82,9 +82,25 @@ Stage2 is based on the pretrained Stage1 checkpoint, with an additional **extend
 
 Key points:
 - Starts from the Stage1 weights `best_stg1.pth`
-- Applies 40+ custom augmentations designed for real-world fisheye conditions (distortion, lighting, weather, motion, etc.)
+- Applies **40+ custom augmentations** designed for real-world fisheye conditions
 - Uses a `stop_epoch` policy to automatically disable strong augmentations after a certain epoch
 - Goal: **Optimize validation F1 score and enhance robustness under real-world fisheye scenarios**
+
+#### Fisheye-specific Augmentations Include:
+- **Distortion Effects**: FisheyeDistortionAugment, FisheyeRadialDistortion, FisheyeBarrelDistortion, FisheyePincushionDistortion
+- **Lens Characteristics**: FisheyeLensSimulation, FisheyeVignetteAugment, FisheyeChromaticAberration
+- **Lighting & Weather**: FisheyeRainSimulation, FisheyeFogSimulation, FisheyeGlareSimulation, FisheyeShadowProjection
+- **Motion & Blur**: FisheyeMotionBlur, FisheyeRadialBlur, FisheyeZoomBlur, BBoxMotionBlur
+- **Edge & Contrast**: FisheyeEdgeEnhancement, FisheyeContrastEnhancement, FisheyeLowContrastEnhancement
+- **Object Enhancement**: FisheyeEdgeObjectEnhancement, FisheyeSmallObjectAmplification, FisheyeObjectBoundaryRefinement
+- **Advanced Effects**: FisheyeHDR, FisheyeDepthOfFieldSimulation, FisheyeLensFlareSimulation
+- **Detection Optimization**: FisheyeDetectionConfidenceBoost, FisheyeFalsePositiveReduction, FisheyeConfidenceCalibration
+
+#### Implementation Details:
+- Augmentation transforms are defined in `src/data/transforms/_transforms_stage2.py`
+- Each augmentation includes probability-based application and parameter randomization
+- Bounding box coordinates are properly transformed for geometric augmentations
+- Supports both PIL Image and torchvision Image tensor formats
 
 Example run:
 ```bash
