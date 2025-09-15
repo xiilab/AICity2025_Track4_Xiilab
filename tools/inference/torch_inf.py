@@ -58,27 +58,27 @@ def draw(images, labels, boxes, scores, output_dir, img_name, other_threshold=0.
             scrs_filtered = scr[valid_indices]
 
             for j, b in enumerate(box_filtered):
-                # 박스 그리기
+                # Draw rectangle
                 draw.rectangle(list(b), outline="red", width=2)
                 
-                # 텍스트 준비
+                # Prepare text
                 text = f"{class_name[lab_filtered[j].item()]}:{round(scrs_filtered[j].item(), 2)}"
                 
-                # 텍스트 크기 측정
+                # Measure text size
                 text_bbox = draw.textbbox((0, 0), text)
                 text_width = text_bbox[2] - text_bbox[0]
                 text_height = text_bbox[3] - text_bbox[1]
                 
-                # 텍스트 배경 그리기 (박스 위에)
+                # Draw text background (above box)
                 draw.rectangle(
                     [b[0], b[1] - text_height - 4, b[0] + text_width + 4, b[1]],
                     fill="white",
                     outline="red"
                 )
                 
-                # 텍스트 그리기
+                # Draw text
                 draw.text(
-                    (b[0] + 2, b[1] - text_height - 2),  # 약간의 패딩 추가
+                    (b[0] + 2, b[1] - text_height - 2),
                     text=text,
                     fill="red",
                 )
@@ -201,11 +201,11 @@ def process_video(model, device, file_path, output_dir):
 import json
 
 def get_image_Id(img_name_without_extension):
-    # 함수는 '.png'가 없는 이름을 받도록 수정되었으므로, .png를 추가해줍니다.
+    # This function expects the name without '.png'; add it back if missing
     img_name = img_name_without_extension
     if not img_name.endswith('.png'):
         img_name += '.png'
-    img_name = img_name.split('.png')[0] # 이 부분은 사실상 중복이나, 원본 함수 로직 유지를 위해 둡니다.
+    img_name = img_name.split('.png')[0] # Kept for compatibility with original logic
     sceneList = ['M', 'A', 'E', 'N']
     cameraIndx = int(img_name.split('_')[0].split('camera')[1])
     sceneIndx = sceneList.index(img_name.split('_')[1])
@@ -305,7 +305,7 @@ def save_predictions_coco_format(image_name, labels, boxes, scores, coco_results
                     
                     # Submission format: special image_id conversion
                     try:
-                        # .png 확장자 제거 (있다면)
+                        # Remove .png extension if present
                         image_name_clean = image_name
                         if image_name_clean.endswith('.png'):
                             image_name_clean = image_name_clean[:-4]
@@ -319,7 +319,7 @@ def save_predictions_coco_format(image_name, labels, boxes, scores, coco_results
                             "score": round(scrs_filtered[j].item(), 4)
                         })
                     except Exception as e:
-                        print(f"❌ 이미지명 처리 오류 {image_name}: {e}. 건너뜀.")
+                        print(f"❌ Image name processing error {image_name}: {e}. Skipped.")
                         continue
 
 
@@ -422,16 +422,16 @@ def main(args):
     if coco_results:
         if args.output_format == 'coco':
             output_json_path = os.path.join(output_dir + "/annotations", "coco_predictions.json")
-            print(f"✅ COCO 형식으로 저장 완료: {output_json_path}")
+            print(f"✅ Saved in COCO format: {output_json_path}")
             result_count = len(coco_results['annotations'])
         else:  # submission
             output_json_path = os.path.join(output_dir + "/annotations", "submission_predictions.json")
-            print(f"✅ Submission 형식으로 저장 완료: {output_json_path}")
+            print(f"✅ Saved in Submission format: {output_json_path}")
             result_count = len(coco_results)
             
         with open(output_json_path, "w") as f:
             json.dump(coco_results, f, indent=2)
-        print(f"📊 총 {result_count}개의 예측 결과 저장됨")
+        print(f"📊 Total {result_count} predictions saved")
 
 
 if __name__ == "__main__":

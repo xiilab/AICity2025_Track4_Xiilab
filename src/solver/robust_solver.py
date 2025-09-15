@@ -20,7 +20,7 @@ class RobustSolver(BaseSolver):
     def __init__(self, cfg):
         super().__init__(cfg)
         
-        # Robust training configuration - cfg.yaml_cfg에서 읽어옴
+        # Robust training configuration - read from cfg.yaml_cfg
         self.enable_robust_training = cfg.yaml_cfg.get('enable_robust_training', True)
         self.enable_robust_loss = cfg.yaml_cfg.get('enable_robust_loss', True)
         self.enable_oadg = cfg.yaml_cfg.get('enable_oadg', True)

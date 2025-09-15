@@ -106,27 +106,27 @@ def draw(images, labels, boxes, scores, output_dir, img_names, thrh=0.7):
             scrs = scr[scr > thrh]
 
             for j, b in enumerate(box):
-                # 박스 그리기
+                # Draw rectangle
                 draw_obj.rectangle(list(b), outline="red", width=2)
                 
-                # 텍스트 준비
+                # Prepare text
                 text = f"{class_name[lab[j].item()]}:{round(scrs[j].item(), 2)}"
                 
-                # 텍스트 크기 측정
+                # Measure text size
                 text_bbox = draw_obj.textbbox((0, 0), text)
                 text_width = text_bbox[2] - text_bbox[0]
                 text_height = text_bbox[3] - text_bbox[1]
                 
-                # 텍스트 배경 그리기 (박스 위에)
+                # Draw text background (above box)
                 draw_obj.rectangle(
                     [b[0], b[1] - text_height - 4, b[0] + text_width + 4, b[1]],
                     fill="white",
                     outline="red"
                 )
                 
-                # 텍스트 그리기
+                # Draw text
                 draw_obj.text(
-                    (b[0] + 2, b[1] - text_height - 2),  # 약간의 패딩 추가
+                    (b[0] + 2, b[1] - text_height - 2),
                     text=text,
                     fill="red",
                 )
@@ -193,7 +193,7 @@ def save_predictions_coco_format(image_name, labels, boxes, scores, coco_results
                 try:
                     x1, y1, x2, y2 = b.tolist()
                     
-                    # .png 확장자 제거 (있다면)
+                    # Remove .png extension if present
                     image_name_clean = image_name
                     if image_name_clean.endswith('.png'):
                         image_name_clean = image_name_clean[:-4]
@@ -223,7 +223,7 @@ def save_predictions_coco_format(image_name, labels, boxes, scores, coco_results
                     continue
                     
     except Exception as e:
-        print(f"❌ 예측 저장 오류 {image_name}: {e}. 건너뜀.")
+        print(f"❌ Error saving predictions {image_name}: {e}. Skipped.")
         return
 
 def process_image_batch(model, device, image_paths, output_dir, gpu_id, result_queue, progress_queue, batch_size=8):

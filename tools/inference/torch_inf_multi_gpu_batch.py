@@ -163,27 +163,27 @@ def draw(images, labels, boxes, scores, output_dir, img_names, thrh=0.6):
         scrs = scr[scr > thrh]
 
         for j, b in enumerate(box):
-            # 박스 그리기
+            # Draw rectangle
             draw.rectangle(list(b), outline="red", width=2)
             
-            # 텍스트 준비
+            # Prepare text
             text = f"{class_name[lab[j].item()]}:{round(scrs[j].item(), 2)}"
             
-            # 텍스트 크기 측정
+            # Measure text size
             text_bbox = draw.textbbox((0, 0), text)
             text_width = text_bbox[2] - text_bbox[0]
             text_height = text_bbox[3] - text_bbox[1]
             
-            # 텍스트 배경 그리기 (박스 위에)
+            # Draw text background (above box)
             draw.rectangle(
                 [b[0], b[1] - text_height - 4, b[0] + text_width + 4, b[1]],
                 fill="white",
                 outline="red"
             )
             
-            # 텍스트 그리기
+            # Draw text
             draw.text(
-                (b[0] + 2, b[1] - text_height - 2),  # 약간의 패딩 추가
+                (b[0] + 2, b[1] - text_height - 2),
                 text=text,
                 fill="red",
             )
@@ -206,10 +206,10 @@ def save_predictions_coco_format_batch(img_names, labels, boxes, scores, coco_re
         for j, b in enumerate(box):
             x1, y1, x2, y2 = b.tolist()
             
-            # 파일명을 키로 사용하여 image_id 찾기
-            file_name = f"{img_name}.png"  # 원본 파일명 복원
+            # Reconstruct file name and match in image_info_map
+            file_name = f"{img_name}.png"
             if file_name not in image_info_map:
-                file_name = f"{img_name}.jpg"  # jpg도 확인
+                file_name = f"{img_name}.jpg"
                 
             if file_name in image_info_map:
                 image_id = image_info_map[file_name]['id']
@@ -221,7 +221,7 @@ def save_predictions_coco_format_batch(img_names, labels, boxes, scores, coco_re
                     "score": round(scrs[j].item(), 4)
                 })
             else:
-                print(f"❌ 이미지 정보를 찾을 수 없음: {file_name}")
+                print(f"❌ Image info not found: {file_name}")
                 continue
 
 def process_batch_images(model, device, image_paths, output_dir, gpu_id, result_queue, progress_queue, image_info_map, batch_size=8, target_size=(1920, 1920)):

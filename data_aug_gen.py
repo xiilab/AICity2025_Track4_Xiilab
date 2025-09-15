@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 import cv2
 import albumentations as A
 import numpy as np
@@ -7,10 +8,8 @@ import random
 import shutil
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-# from matplotlib.colors import COLORS  # 불필요한 import 제거
-# from copy_paste import CopyPaste  # BaseMixTransform 기반 CopyPaste 클래스
 
-# 클래스 아이디 → 이름 매핑
+# Class id → name mapping
 class_map = {
     0: "Bus",
     1: "Bike",
@@ -19,7 +18,7 @@ class_map = {
     4: "Truck"
 }
 
-# 시각화용 색상 매핑
+# Color mapping for visualization
 class_colors = {
     0: 'red',      # Bus
     1: 'blue',     # Bike
@@ -29,12 +28,12 @@ class_colors = {
 }
 
 # ==========================================
-# 1) BBoxMotionBlur 클래스 (기존 그대로)
+# 1) BBoxMotionBlur class
 # ==========================================
 class BBoxMotionBlur(A.ImageOnlyTransform):
     """
-    바운딩 박스 내부 영역에만 모션 블러를 적용하는 Transform.
-    bboxes 파라미터를 받아서, 각 박스 영역에 대해서만 블러 커널을 적용합니다.
+    Transform that applies motion blur only within bounding box regions.
+    Uses bboxes parameter and applies blur kernel per bbox area.
     """
     def __init__(self, blur_limit=(3, 7), angle_limit=(-45, 45), always_apply=False, p=0.5):
         super().__init__(always_apply, p)
@@ -46,15 +45,15 @@ class BBoxMotionBlur(A.ImageOnlyTransform):
         bboxes = params.get("bboxes", [])
         output = image.copy()
 
-        # 랜덤 커널 크기 (홀수)
+        # Random kernel size (odd)
         kernel_size = random.randint(*self.blur_limit)
         if kernel_size % 2 == 0:
             kernel_size += 1
 
-        # 랜덤 블러 각도
+        # Random blur angle
         angle = random.uniform(*self.angle_limit)
 
-        # 모션 블러 커널 생성
+        # Create motion blur kernel
         k = np.zeros((kernel_size, kernel_size), dtype=np.float32)
         k[kernel_size // 2, :] = 1.0
         M = cv2.getRotationMatrix2D(
@@ -64,7 +63,7 @@ class BBoxMotionBlur(A.ImageOnlyTransform):
         k = cv2.warpAffine(k, M, (kernel_size, kernel_size))
         k /= k.sum()
 
-        # 각 bbox 영역마다 필터 적용
+        # Apply filter for each bbox region
         for bbox in bboxes:
             x_min, y_min, box_w, box_h = bbox[:4]  # COCO 포맷: x_min, y_min, w, h
             x1 = int(round(x_min))
@@ -72,7 +71,7 @@ class BBoxMotionBlur(A.ImageOnlyTransform):
             x2 = int(round(x_min + box_w))
             y2 = int(round(y_min + box_h))
 
-            # 이미지 경계 내로 클램핑
+            # Clamp to image boundaries
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(w, x2), min(h, y2)
 
@@ -90,17 +89,17 @@ class BBoxMotionBlur(A.ImageOnlyTransform):
 
 
 # ==========================================
-# 2) Bounding Box → Mask 변환 함수
+# 2) Bounding Box → Mask helper
 # ==========================================
 def bboxes_to_masks(bboxes, image_shape):
     """
-    COCO 형식 바운딩 박스를 개별 이진 마스크로 변환.
+    Convert COCO-format bounding boxes to individual binary masks.
     
     Args:
-        bboxes: [(x_min, y_min, w, h), ...] (COCO 포맷)
+        bboxes: [(x_min, y_min, w, h), ...] (COCO format)
         image_shape: (height, width[, channels])
     Returns:
-        masks: [mask1, mask2, ...], 각 mask는 (H, W) 이진 배열
+        masks: list of (H, W) binary arrays
     """
     h, w = image_shape[:2]
     masks = []
@@ -121,7 +120,7 @@ def bboxes_to_masks(bboxes, image_shape):
     return masks
 
 # ==========================================
-# 4) 실제 증강 함수 ( Albumentations 적용)
+# 4) Augmentation function (Albumentations)
 # ==========================================
 def coco_augment_image(
     image,
@@ -130,18 +129,17 @@ def coco_augment_image(
     paste_coco_bboxes=None
 ):
     """
-    주어진 COCO 형식 이미지/박스를 증강.
-    여러 Albumentations Transform을 순차 적용.
-
+    Apply sequential Albumentations transforms to a COCO-format image/boxes.
+    
     Args:
-        image: 원본 이미지 (H, W, 3) numpy array
-        coco_bboxes: [(category_id, x_min, y_min, w, h), ...] 원본 바운딩 박스
-        paste_image: 사용하지 않음 (이전 버전과의 호환성을 위해 유지)
-        paste_coco_bboxes: 사용하지 않음 (이전 버전과의 호환성을 위해 유지)
-
+        image: original image (H, W, 3) numpy array
+        coco_bboxes: [(category_id, x_min, y_min, w, h)] original boxes
+        paste_image: unused (kept for compatibility)
+        paste_coco_bboxes: unused (kept for compatibility)
+    
     Returns:
-        aug_image: 증강된 이미지 (numpy array)
-        aug_bboxes: 증강된 COCO 형식 바운딩 박스 [(category_id, x_min, y_min, w, h), ...]
+        aug_image: augmented image (numpy array)
+        aug_bboxes: augmented boxes in COCO format
     """
     img_h, img_w = image.shape[:2]
     bboxes_out = coco_bboxes.copy()
@@ -161,14 +159,14 @@ def coco_augment_image(
                            num_shadows=3,
                            shadow_dimension=3, p=0.5),
             A.GaussNoise(std_range=[0.01, 0.09],mean_range=[0, 0], per_channel=True,noise_scale_factor=1, p=0.5),
-            A.Posterize(num_bits=(4, 6), p=0.5),  # 새로 추가: 이미지 포스터화
+            A.Posterize(num_bits=(4, 6), p=0.5),  # Posterization
             A.RandomGravel(gravel_roi=(0.1, 0.4, 0.9, 0.9), 
-                          number_of_patches=3, p=0.5),  # 새로 추가: 자갈 효과
+                          number_of_patches=3, p=0.5),  # Random gravel effect
         ],
         bbox_params=A.BboxParams(format="coco", label_fields=["class_labels"])
     )
 
-    # Albumentations 입력 준비: 좌표를 픽셀 범위 내로 클램핑
+    # Prepare Albumentations input: clamp coords to image bounds
     filtered_bboxes = []
     filtered_labels = []
     for (cat_id, x_min, y_min, bw, bh) in bboxes_out:
@@ -191,7 +189,7 @@ def coco_augment_image(
     aug_bboxes_raw = augmented["bboxes"]
     aug_labels_raw = augmented["class_labels"]
 
-    # 최종 클램핑 후 COCO 형식으로 재조합
+    # Final clamp and recompose into COCO format
     final_bboxes = []
     for idx, bbox in enumerate(aug_bboxes_raw):
         x_min, y_min, bw, bh = bbox
@@ -279,7 +277,7 @@ def augment_coco_dataset(
         "annotations": new_annotations
     }
 
-    print(f"📊 원본 데이터: {len(images_info)}개 이미지, {len(annotations_info)}개 어노테이션")
+    print(f"📊 Original data: {len(images_info)} images, {len(annotations_info)} annotations")
 
     # 2) 각 원본 이미지별로 처리
     processed_count = 0
@@ -295,18 +293,18 @@ def augment_coco_dataset(
         # 파일명 중복 체크 (확장자 제거한 베이스명으로 체크)
         base_name = os.path.splitext(file_name)[0]
         if base_name in processed_filenames:
-            print(f"[건너뜀] 이미 처리된 파일: {file_name}")
+            print(f"[Skip] Already processed file: {file_name}")
             skipped_count += 1
             continue
 
         if not os.path.exists(img_path):
-            print(f"[경고] 이미지가 없음: {img_path}")
+            print(f"[Warn] Image not found: {img_path}")
             continue
 
         # 원본 이미지 로드
         orig_img_np = cv2.imread(img_path)
         if orig_img_np is None:
-            print(f"[경고] 이미지 로드 실패: {img_path}")
+            print(f"[Warn] Failed to load image: {img_path}")
             continue
 
         # 원본 바운딩 박스 리스트 준비 (COCO 포맷)
@@ -405,18 +403,18 @@ def augment_coco_dataset(
 
         processed_count += 1
         if processed_count % 100 == 0:
-            print(f"[진행] {processed_count}개 이미지 처리 완료...")
+            print(f"[Progress] Processed {processed_count} images...")
 
-    print(f"[완료] 총 {processed_count}개 이미지 처리, {skipped_count}개 중복 건너뜀")
+    print(f"[Done] Total processed: {processed_count}, skipped duplicates: {skipped_count}")
 
     # 3) 생성된 JSON 저장
     os.makedirs(os.path.dirname(save_json_path), exist_ok=True)
     with open(save_json_path, "w") as f:
         json.dump(new_coco, f, indent=2)
 
-    print(f"[완료] 증강 이미지 폴더: {save_img_dir}")
-    print(f"[완료] 증강용 COCO JSON: {save_json_path}")
-    print(f"📊 최종 결과: {len(new_images)}개 이미지, {len(new_annotations)}개 어노테이션")
+    print(f"[Done] Augmented image dir: {save_img_dir}")
+    print(f"[Done] Augmented COCO JSON: {save_json_path}")
+    print(f"📊 Final: {len(new_images)} images, {len(new_annotations)} annotations")
 
 
 # ==========================================
@@ -424,49 +422,49 @@ def augment_coco_dataset(
 # ==========================================
 def validate_coco_format(coco_json_path, image_dir=None):
     """
-    생성된 COCO JSON 파일의 필수 구조/ID 중복/바운딩박스 유효성 등을 간단히 검증.
-    파일명 중복도 체크합니다.
-
+    Validate basic structure/ID uniqueness/bbox validity of generated COCO JSON.
+    Also checks duplicate file names.
+    
     Args:
-        coco_json_path: 검사할 COCO JSON 경로
-        image_dir: (선택) 이미지 디렉토리 경로 (파일 존재 여부 확인용)
-
+        coco_json_path: COCO JSON path to validate
+        image_dir: optional image dir (to verify file existence)
+    
     Returns:
-        bool: 검증 통과 시 True, 문제 발견 시 False
+        bool: True if passed, False otherwise
     """
     try:
         with open(coco_json_path, "r") as f:
             data = json.load(f)
 
-        # 필수 키 검사
+        # Required keys
         for key in ("images", "annotations", "categories"):
             if key not in data:
-                print(f"❌ 필수 키 누락: {key}")
+                print(f"❌ Missing required key: {key}")
                 return False
 
         images = data["images"]
         annotations = data["annotations"]
         categories = data["categories"]
 
-        print(f"✅ 이미지 수: {len(images)}")
-        print(f"✅ 어노테이션 수: {len(annotations)}")
-        print(f"✅ 카테고리 수: {len(categories)}")
+        print(f"✅ Images: {len(images)}")
+        print(f"✅ Annotations: {len(annotations)}")
+        print(f"✅ Categories: {len(categories)}")
 
-        # 이미지 ID 중복 검사
+        # Duplicate image_id
         img_ids = [img["id"] for img in images]
         if len(img_ids) != len(set(img_ids)):
-            print("❌ 중복된 이미지 ID 발견")
+            print("❌ Duplicate image_id found")
             return False
         else:
-            print("✅ 이미지 ID 중복 없음")
+            print("✅ No duplicate image_id")
 
-        # 파일명 중복 검사
+        # Duplicate file_name
         filenames = [img["file_name"] for img in images]
         if len(filenames) != len(set(filenames)):
             duplicates = len(filenames) - len(set(filenames))
-            print(f"❌ 중복된 파일명 {duplicates}개 발견")
+            print(f"❌ Found {duplicates} duplicate file_name(s)")
             
-            # 중복 파일명 샘플 출력
+            # Print sample duplicate names
             seen = set()
             duplicate_names = []
             for name in filenames:
@@ -475,58 +473,58 @@ def validate_coco_format(coco_json_path, image_dir=None):
                 else:
                     seen.add(name)
             
-            print(f"   중복 파일명 샘플 (최대 5개): {duplicate_names[:5]}")
+            print(f"   Duplicate samples (up to 5): {duplicate_names[:5]}")
             return False
         else:
-            print("✅ 파일명 중복 없음")
+            print("✅ No duplicate file_name")
 
-        # 어노테이션 ID 중복 검사
+        # Duplicate annotation id
         ann_ids = [ann["id"] for ann in annotations]
         if len(ann_ids) != len(set(ann_ids)):
-            print("❌ 중복된 어노테이션 ID 발견")
+            print("❌ Duplicate annotation id found")
             return False
         else:
-            print("✅ 어노테이션 ID 중복 없음")
+            print("✅ No duplicate annotation id")
 
         valid_img_ids = set(img_ids)
         valid_cat_ids = set(cat["id"] for cat in categories)
 
-        # 어노테이션 샘플 검사 (최초 10개)
+        # Sample annotation checks (first 10)
         validation_errors = 0
         for i, ann in enumerate(annotations[:10]):
             for req_key in ("id", "image_id", "category_id", "bbox", "area"):
                 if req_key not in ann:
-                    print(f"❌ 어노테이션[{i}] 누락된 키: {req_key}")
+                    print(f"❌ annotation[{i}] missing key: {req_key}")
                     validation_errors += 1
 
             if ann["image_id"] not in valid_img_ids:
-                print(f"❌ 어노테이션[{i}] 잘못된 image_id: {ann['image_id']}")
+                print(f"❌ annotation[{i}] invalid image_id: {ann['image_id']}")
                 validation_errors += 1
 
             if ann["category_id"] not in valid_cat_ids:
-                print(f"❌ 어노테이션[{i}] 잘못된 category_id: {ann['category_id']}")
+                print(f"❌ annotation[{i}] invalid category_id: {ann['category_id']}")
                 validation_errors += 1
 
             bbox = ann["bbox"]
             if (not isinstance(bbox, list)) or len(bbox) != 4:
-                print(f"❌ 어노테이션[{i}] 잘못된 bbox 형식: {bbox}")
+                print(f"❌ annotation[{i}] invalid bbox format: {bbox}")
                 validation_errors += 1
                 continue
 
             x_min, y_min, bw, bh = bbox
             if bw <= 0 or bh <= 0:
-                print(f"❌ 어노테이션[{i}] 유효하지 않은 bbox 크기: {bbox}")
+                print(f"❌ annotation[{i}] invalid bbox size: {bbox}")
                 validation_errors += 1
 
             expected_area = bw * bh
             if abs(ann["area"] - expected_area) > 1e-2:
-                print(f"❌ 어노테이션[{i}] area 불일치: {ann['area']} vs {expected_area}")
+                print(f"❌ annotation[{i}] area mismatch: {ann['area']} vs {expected_area}")
                 validation_errors += 1
 
         if validation_errors == 0:
-            print("✅ 어노테이션 형식 검증 통과")
+            print("✅ Annotation structure validated")
 
-        # 이미지 파일 존재 여부 (샘플 5개)
+        # Existence of image files (sample 5)
         if image_dir:
             missing = []
             for img in images[:5]:
@@ -534,12 +532,12 @@ def validate_coco_format(coco_json_path, image_dir=None):
                 if not os.path.exists(path):
                     missing.append(img["file_name"])
             if missing:
-                print(f"❌ 누락된 이미지 파일: {missing}")
+                print(f"❌ Missing image files: {missing}")
                 return False
             else:
-                print("✅ 이미지 파일 존재 확인 (샘플)")
+                print("✅ Sample image file existence OK")
 
-        # 전체 매칭 체크 (선택사항)
+        # Full match check (optional)
         if image_dir and os.path.exists(image_dir):
             actual_files = set(os.listdir(image_dir))
             json_files = set(img["file_name"] for img in images)
@@ -548,22 +546,22 @@ def validate_coco_format(coco_json_path, image_dir=None):
             extra_in_dir = actual_files - json_files
             
             if len(missing_in_dir) == 0 and len(extra_in_dir) == 0:
-                print("✅ JSON과 실제 파일 100% 매칭")
+                print("✅ JSON matches directory 100%")
             else:
                 if len(missing_in_dir) > 0:
-                    print(f"⚠️ JSON에는 있지만 디렉토리에 없는 파일: {len(missing_in_dir)}개")
+                    print(f"⚠️ In JSON but missing in dir: {len(missing_in_dir)} files")
                 if len(extra_in_dir) > 0:
-                    print(f"⚠️ 디렉토리에는 있지만 JSON에 없는 파일: {len(extra_in_dir)}개")
+                    print(f"⚠️ In dir but missing in JSON: {len(extra_in_dir)} files")
 
         if validation_errors > 0:
-            print(f"❌ 총 {validation_errors}개의 검증 오류 발견")
+            print(f"❌ Total validation errors: {validation_errors}")
             return False
 
-        print("✅ COCO 포맷 검증 통과!")
+        print("✅ COCO format validation passed!")
         return True
 
     except Exception as e:
-        print(f"❌ 검증 중 오류 발생: {e}")
+        print(f"❌ Validation error: {e}")
         return False
 
 
@@ -874,11 +872,22 @@ def validate_annotations_visually(image_dir, coco_json_path, output_dir, num_che
 # 7) 실행 예제
 # ==========================================
 if __name__ == "__main__":
-    image_dir = "/DATA/jhlee/fisheye1k_pseudo/images"
-    coco_json = "/DATA/jhlee/fisheye1k_pseudo/fisheye1k_merged_vnpt_nota_wbf.json"
-    save_img_dir = "/DATA/jhlee/pseudo_label_aug_1k/images"
-    save_json = "/DATA/jhlee/pseudo_label_aug_1k/pseudo_label_aug_1k.json"
-    num_augments = 3
+    parser = argparse.ArgumentParser(description="Stage1 COCO dataset augmentation (CLI configurable)")
+    parser.add_argument("-i", "--image-dir", required=True, help="원본 이미지 디렉토리")
+    parser.add_argument("-j", "--coco-json", required=True, help="원본 COCO JSON 경로")
+    parser.add_argument("-o", "--save-img-dir", required=True, help="증강 이미지 저장 디렉토리")
+    parser.add_argument("-a", "--save-json", required=True, help="생성될 COCO JSON 경로")
+    parser.add_argument("-n", "--num-augments", type=int, default=3, help="이미지당 증강본 개수 (기본: 3)")
+    parser.add_argument("--validation-dir", default=None, help="시각적 검증 결과 저장 디렉토리 (미지정 시 자동 설정)")
+
+    args = parser.parse_args()
+
+    image_dir = args.image_dir
+    coco_json = args.coco_json
+    save_img_dir = args.save_img_dir
+    save_json = args.save_json
+    num_augments = args.num_augments
+    validation_dir = args.validation_dir or os.path.join(os.path.dirname(save_img_dir), "augmentation_validation2")
 
     print("🚀 전체 이미지 데이터 증강 시작...")
     print(f"📁 원본 이미지: {image_dir}")
@@ -908,7 +917,6 @@ if __name__ == "__main__":
     # 4) 시각적 검증 (증강된 데이터셋)
     if valid:
         print("\n🔍 증강된 데이터셋 시각적 검증 중...")
-        validation_dir = "/DATA/jhlee/augmentation_validation2"
         validate_annotations_visually(
             image_dir=save_img_dir,
             coco_json_path=save_json,

@@ -165,23 +165,23 @@ class ConvertCocoPolysToMask(object):
             if num_keypoints:
                 keypoints = keypoints.view(num_keypoints, -1, 3)
 
-        # 강화된 필터링: 너무 작은 GT 박스 제거
-        min_box_size = 3.0  # 최소 박스 크기 (픽셀)
-        min_area = 9.0      # 최소 박스 면적 (픽셀^2)
+        # Enhanced filtering: remove very small GT boxes
+        min_box_size = 3.0  # minimum box size in pixels
+        min_area = 9.0      # minimum area in pixels^2
         
-        # 기본 유효성 검사
+        # Basic validity check
         valid_boxes = (boxes[:, 3] > boxes[:, 1]) & (boxes[:, 2] > boxes[:, 0])
         
-        # 크기 검사
+        # Size check
         box_width = boxes[:, 2] - boxes[:, 0]
         box_height = boxes[:, 3] - boxes[:, 1]
         size_valid = (box_width >= min_box_size) & (box_height >= min_box_size)
         
-        # 면적 검사
+        # Area check
         box_area = box_width * box_height
         area_valid = box_area >= min_area
         
-        # 모든 조건을 만족하는 박스만 유지
+        # Keep boxes that meet all conditions
         keep = valid_boxes & size_valid & area_valid
         
         boxes = boxes[keep]

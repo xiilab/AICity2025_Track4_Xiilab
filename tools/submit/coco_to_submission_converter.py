@@ -2,11 +2,11 @@ import json
 import argparse
 
 def get_image_Id(img_name_without_extension):
-    # 함수는 '.png'가 없는 이름을 받도록 수정되었으므로, .png를 추가해줍니다.
+    # This function expects the name without '.png'; add it back if missing
     img_name = img_name_without_extension
     if not img_name.endswith('.png'):
         img_name += '.png'
-    img_name = img_name.split('.png')[0] # 이 부분은 사실상 중복이나, 원본 함수 로직 유지를 위해 둡니다.
+    img_name = img_name.split('.png')[0]  # Kept for compatibility with original logic
     sceneList = ['M', 'A', 'E', 'N']
     cameraIndx = int(img_name.split('_')[0].split('camera')[1])
     sceneIndx = sceneList.index(img_name.split('_')[1])
@@ -21,7 +21,7 @@ def convert_to_submission_format(input_file_path, submission_file_path):
     submission_data = []
 
     for item in current_data:
-        image_name_str = item.get('image_id') # 예: "camera23_A_55"
+        image_name_str = item.get('image_id')  # e.g., "camera23_A_55"
         category_id = item.get('category_id')
         bbox = item.get('bbox')
         score = item.get('score')
@@ -55,6 +55,6 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    # 명령줄 인자로 받은 경로를 사용
+    # Use paths from CLI arguments
     convert_to_submission_format(args.input, args.output)
     print(f"Script finished. Input: {args.input}, Output: {args.output}")

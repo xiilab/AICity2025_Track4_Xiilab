@@ -168,32 +168,32 @@ def draw(images, labels, boxes, scores, output_dir, file_names, thrh=0.6):
         scrs = scr[scr > thrh]
 
         for j, b in enumerate(box):
-            # 박스 그리기
+            # Draw rectangle
             draw.rectangle(list(b), outline="red", width=2)
             
-            # 텍스트 준비
+            # Prepare text
             text = f"{class_name[lab[j].item()]}:{round(scrs[j].item(), 2)}"
             
-            # 텍스트 크기 측정
+            # Measure text size
             text_bbox = draw.textbbox((0, 0), text)
             text_width = text_bbox[2] - text_bbox[0]
             text_height = text_bbox[3] - text_bbox[1]
             
-            # 텍스트 배경 그리기 (박스 위에)
+            # Draw text background (above box)
             draw.rectangle(
                 [b[0], b[1] - text_height - 4, b[0] + text_width + 4, b[1]],
                 fill="white",
                 outline="red"
             )
             
-            # 텍스트 그리기
+            # Draw text
             draw.text(
                 (b[0] + 2, b[1] - text_height - 2),
                 text=text,
                 fill="red",
             )
 
-        # 파일명에서 확장자 제거해서 저장
+        # Save using file name without extension
         base_name = os.path.splitext(file_name)[0]
         im.save(f"{output_dir}/results_{base_name}.png")
 
@@ -208,7 +208,7 @@ def save_predictions_coco_format_batch(file_names, labels, boxes, scores, coco_r
         box = boxes[i][scr > thrh]
         scrs = scr[scr > thrh]
 
-        # 파일명으로 직접 매칭 (확장자 제거/추가 로직 불필요)
+        # Directly match by file name
         if file_name in image_info_map:
             image_id = image_info_map[file_name]['id']
             
@@ -222,7 +222,7 @@ def save_predictions_coco_format_batch(file_names, labels, boxes, scores, coco_r
                     "score": round(scrs[j].item(), 4)
                 })
         else:
-            print(f"❌ 이미지 정보를 찾을 수 없음: {file_name}")
+            print(f"❌ Image info not found: {file_name}")
 
 def process_batch_images(model, device, image_paths, output_dir, gpu_id, result_queue, progress_queue, image_info_map, batch_size=8, target_size=(1920, 1920)):
     """Process images in batches on a specific GPU - OPTIMIZED"""
@@ -313,7 +313,7 @@ def process_batch_images(model, device, image_paths, output_dir, gpu_id, result_
             postprocess_start = time.time()
             labels, boxes, scores = outputs
             
-            # 파일명 추출 (확장자 포함)
+            # Extract file names (with extension)
             file_names = [os.path.basename(path) for path in batch_paths]
             processed_files.extend(file_names)
             

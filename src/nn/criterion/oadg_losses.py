@@ -290,7 +290,7 @@ def binary_cross_entropy(pred,
     label = torch.chunk(label, num_views)[0]
     avg_factor = avg_factor / num_views if avg=='1.1' else avg_factor
 
-    # 수치적 안정성을 위한 클램핑
+    # Clamp inputs for numerical stability
     pred_orig_safe = torch.clamp(pred_orig, min=-50.0, max=50.0)
     pred_orig_safe = torch.nan_to_num(pred_orig_safe, nan=0.0, posinf=50.0, neginf=-50.0)
     label_safe = torch.clamp(label.float(), min=0.0, max=1.0)
@@ -299,7 +299,7 @@ def binary_cross_entropy(pred,
     loss = F.binary_cross_entropy_with_logits(
         pred_orig_safe, label_safe, pos_weight=class_weight, reduction='none')
 
-    # NaN 체크 및 후처리
+    # Replace NaNs/Infs
     loss = torch.nan_to_num(loss, nan=0.0, posinf=1e6, neginf=0.0)
 
     # do the reduction for the weighted loss
@@ -335,39 +335,39 @@ def jsd_loss(pred,
     try:
         pred_orig, pred_aug1, pred_aug2 = torch.chunk(pred, 3)
 
-        # 수치적 안정성을 위한 입력 클램핑
+        # Clamp inputs for numerical stability
         pred_orig = torch.clamp(pred_orig, min=-10.0, max=10.0)
         pred_aug1 = torch.clamp(pred_aug1, min=-10.0, max=10.0)
         pred_aug2 = torch.clamp(pred_aug2, min=-10.0, max=10.0)
         
-        # NaN 체크 및 제거
+        # Replace NaNs/Infs
         pred_orig = torch.nan_to_num(pred_orig, nan=0.0, posinf=10.0, neginf=-10.0)
         pred_aug1 = torch.nan_to_num(pred_aug1, nan=0.0, posinf=10.0, neginf=-10.0)
         pred_aug2 = torch.nan_to_num(pred_aug2, nan=0.0, posinf=10.0, neginf=-10.0)
 
-        # 안전한 softmax 계산
+        # Safe softmax
         p_clean = F.softmax(pred_orig, dim=1)
         p_aug1 = F.softmax(pred_aug1, dim=1)  
         p_aug2 = F.softmax(pred_aug2, dim=1)
         
-        # 확률값 안정화 (매우 작은 값 방지)
+        # Stabilize probabilities (avoid extremely small values)
         eps = 1e-8
         p_clean = torch.clamp(p_clean, min=eps, max=1-eps)
         p_aug1 = torch.clamp(p_aug1, min=eps, max=1-eps)
         p_aug2 = torch.clamp(p_aug2, min=eps, max=1-eps)
         
-        # NaN 체크
+        # Replace NaNs/Infs
         p_clean = torch.nan_to_num(p_clean, nan=eps, posinf=1-eps, neginf=eps)
         p_aug1 = torch.nan_to_num(p_aug1, nan=eps, posinf=1-eps, neginf=eps)
         p_aug2 = torch.nan_to_num(p_aug2, nan=eps, posinf=1-eps, neginf=eps)
 
-        # Mixture distribution 계산 (log 없이)
+        # Mixture distribution (without log)
         p_mixture = (p_clean + p_aug1 + p_aug2) / 3.0
         p_mixture = torch.clamp(p_mixture, min=eps, max=1-eps)
         p_mixture = torch.nan_to_num(p_mixture, nan=eps, posinf=1-eps, neginf=eps)
         
-        # 정확한 JSD 계산: JS(P,Q) = 0.5*KL(P||M) + 0.5*KL(Q||M), M = 0.5*(P+Q)
-        # Manual KL divergence로 gradient 안정성 확보
+        # JSD: JS(P,Q) = 0.5*KL(P||M) + 0.5*KL(Q||M), M = 0.5*(P+Q)
+        # Use manual KL for gradient stability
         
         # Safe log computation
         log_p_mixture = torch.log(p_mixture + eps)
@@ -383,7 +383,7 @@ def jsd_loss(pred,
         # Jensen-Shannon Divergence
         loss = (kl1 + kl2 + kl3) / 3.0
         
-        # Final NaN/Inf 체크
+        # Final NaN/Inf check
         if torch.isnan(loss).any() or torch.isinf(loss).any():
             return torch.tensor(1e-6, device=pred.device, requires_grad=True)
 
@@ -397,7 +397,7 @@ def jsd_loss(pred,
         return loss
         
     except Exception as e:
-        # Fallback: 안전한 더미 손실 반환
+        # Fallback: return safe dummy loss
         print(f"JSD Loss Error: {e}")
         return torch.tensor(1e-6, device=pred.device, requires_grad=True)
 
@@ -429,12 +429,12 @@ def jsdv1_3_loss(pred,
     """
     pred_orig, pred_aug1, pred_aug2 = torch.chunk(pred, 3)
 
-    # 수치적 안정성을 위한 입력 클램핑
+    # Clamp inputs for numerical stability
     pred_orig = torch.clamp(pred_orig, min=-10.0, max=10.0)
     pred_aug1 = torch.clamp(pred_aug1, min=-10.0, max=10.0)
     pred_aug2 = torch.clamp(pred_aug2, min=-10.0, max=10.0)
     
-    # NaN 체크 및 제거
+    # Replace NaNs/Infs
     pred_orig = torch.nan_to_num(pred_orig, nan=0.0, posinf=10.0, neginf=-10.0)
     pred_aug1 = torch.nan_to_num(pred_aug1, nan=0.0, posinf=10.0, neginf=-10.0)
     pred_aug2 = torch.nan_to_num(pred_aug2, nan=0.0, posinf=10.0, neginf=-10.0)
@@ -453,17 +453,17 @@ def jsdv1_3_loss(pred,
         p_aug1 = F.softmax(pred_aug1, dim=1)
         p_aug2 = F.softmax(pred_aug2, dim=1)
     
-    # 확률값 안정화
+    # Stabilize probabilities
     p_clean = torch.clamp(p_clean, min=eps, max=1-eps)
     p_aug1 = torch.clamp(p_aug1, min=eps, max=1-eps)
     p_aug2 = torch.clamp(p_aug2, min=eps, max=1-eps)
     
-    # NaN 체크
+    # Replace NaNs/Infs
     p_clean = torch.nan_to_num(p_clean, nan=eps, posinf=1-eps, neginf=eps)
     p_aug1 = torch.nan_to_num(p_aug1, nan=eps, posinf=1-eps, neginf=eps)
     p_aug2 = torch.nan_to_num(p_aug2, nan=eps, posinf=1-eps, neginf=eps)
 
-    # Mixture distribution 계산 (안전)
+    # Mixture distribution (safe)
     p_mixture = (p_clean + p_aug1 + p_aug2) / 3.0
     p_mixture = torch.clamp(p_mixture, min=eps, max=1-eps)
     p_mixture = torch.nan_to_num(p_mixture, nan=eps, posinf=1-eps, neginf=eps)
@@ -481,7 +481,7 @@ def jsdv1_3_loss(pred,
     
     loss = (kl1 + kl2 + kl3) / 3.
             
-    # NaN 체크 후 reduction
+    # Replace NaNs/Infs then reduce
     loss = torch.nan_to_num(loss, nan=0.0, posinf=1e6, neginf=0.0)
     loss = torch.sum(loss, dim=-1)
 
