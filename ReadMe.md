@@ -1,6 +1,8 @@
 ## [ICCV 2025] AICity Challenge Track 4 : Real-Time Object Detection on Edge Devices: A Fisheye Specific DFINE
 
-![Fisheye detection preview](figure/fisheye_det.png)
+<p align="center">
+  <img src="figure/fisheye_det.png" alt="Fisheye detection preview" width="800" />
+</p>
 
 This repository contains the **Xiilab Team** solution for the **ICCV 2025 AICity Challenge Track 4**, focusing on **fisheye object detection**.
 
