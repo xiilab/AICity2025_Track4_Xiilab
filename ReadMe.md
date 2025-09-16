@@ -1,4 +1,16 @@
-## AICity Track 4 Fisheye D-FINE: Fine-grained Distribution Refinement for DETR-based Object Detection
+## [ICCV 2025] AICity Challenge Track 4 : Real-Time Object Detection on Edge Devices: A Fisheye Specific DFINE
+
+![Fisheye detection preview](figure/fisheye_det.png)
+
+This repository contains the **Xiilab Team** solution for the **ICCV 2025 AICity Challenge Track 4**, focusing on **fisheye object detection**.
+
+We build upon **DFINE** and adapt the model and training pipeline specifically for fisheye imagery. Our contributions include:
+
+- **Fisheye-specific augmentations** to handle geometric distortions  
+- **Semi-supervised data preparation** leveraging unlabeled fisheye data  
+- An enhanced **DFINE-based training pipeline** optimized for fisheye perception  
+
+These adaptations enable robust detection performance in wide-angle, distorted driving scenes commonly encountered in real-world fisheye applications.
 
 ### 1. Setup
 
